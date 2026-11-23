@@ -23,7 +23,7 @@ func main() {
 	cfg := api.ConfigFromEnv()
 	srv, err := api.NewServer(cfg)
 	if err != nil {
-		slog.Error("startup failed", "err", err)
+		slog.Error("startup failed", "error", err)
 		os.Exit(1)
 	}
 
