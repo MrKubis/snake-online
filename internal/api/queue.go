@@ -9,7 +9,7 @@ import (
 )
 
 type QueueStatus struct {
-	Size int
+	Size int `json:"size"`
 }
 
 func (s *Server) JoinQueue(ctx context.Context, userId string) (bool, error) {

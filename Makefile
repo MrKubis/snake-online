@@ -4,4 +4,4 @@ down:
 	docker compose -f deploy/compose.yaml down
 
 run-%:
-	set -a; . ./.env.local; set +a; go run ./cmd/$*
+	set -a; . ./.env; set +a; go run ./cmd/$*

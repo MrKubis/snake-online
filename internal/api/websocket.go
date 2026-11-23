@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -17,19 +18,20 @@ const (
 )
 
 type WSMessage struct {
-	Type WSMessageType `json:"type"`
+	Type    WSMessageType   `json:"type"`
+	Payload json.RawMessage `json:"payload,omitempty"`
 }
 
 const (
-	writeWait = 5 * time.Second
-	pongWait  = 60 * time.Second
+	writeWait  = 5 * time.Second
+	pongWait   = 60 * time.Second
+	pingPeriod = pongWait * 9 / 10
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// check if sent via browser
 		origin := r.Header.Get("Origin")
 		if origin == "" {
 			return true
@@ -66,6 +68,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	if !joined {
 		closeWith(conn, websocket.ClosePolicyViolation, "already in queue")
+		return
 	}
 
 	defer func() {
@@ -76,11 +79,6 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	setupHeartBeat(conn)
 
-	conn.SetWriteDeadline(time.Now().Add(writeWait))
-	if err := conn.WriteJSON(WSMessage{Type: MessageJoin}); err != nil {
-		return
-	}
-
 	go func() {
 		defer cancel()
 		for {
@@ -89,6 +87,25 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
+
+	conn.SetWriteDeadline(time.Now().Add(writeWait))
+	if err := conn.WriteJSON(WSMessage{Type: MessageJoin}); err != nil {
+		return
+	}
+	ticker := time.NewTicker(pingPeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			closeWith(conn, websocket.CloseNormalClosure, "")
+			return
+		case <-ticker.C:
+			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)); err != nil {
+				return
+			}
+		}
+	}
 }
 
 func setupHeartBeat(conn *websocket.Conn) {

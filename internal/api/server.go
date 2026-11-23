@@ -16,6 +16,7 @@ import (
 type Server struct {
 	rdb       *redis.Client
 	jwtSecret []byte
+	hub       *Hub
 }
 
 func (s *Server) ApiRoutes() http.Handler {
