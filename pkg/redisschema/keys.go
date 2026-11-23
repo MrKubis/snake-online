@@ -1,5 +1,6 @@
 package redisschema
 
 const (
-	QueueKey = "queue.players"
+	QueueKey          = "queue:players"
+	HeartBeatQueueKey = "queue:heartbeats"
 )

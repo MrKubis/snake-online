@@ -23,9 +23,10 @@ type WSMessage struct {
 }
 
 const (
-	writeWait  = 5 * time.Second
-	pongWait   = 60 * time.Second
-	pingPeriod = pongWait * 9 / 10
+	writeWait            = 5 * time.Second
+	pongWait             = 60 * time.Second
+	pingPeriod           = pongWait * 9 / 10
+	QueueHeartbeatMaxAge = pongWait + 15*time.Second
 )
 
 var upgrader = websocket.Upgrader{
@@ -77,7 +78,23 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		s.LeaveQueue(leaveContext, playerId)
 	}()
 
-	setupHeartBeat(conn)
+	conn.SetReadLimit(512)
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+
+		heartbeatContext, c := context.WithTimeout(context.Background(), 2*time.Second)
+		defer c()
+
+		err := s.Heartbeat(heartbeatContext, playerId)
+
+		if err != nil {
+			slog.Error("Heartbeat failed", "player_id", playerId)
+			return err
+		}
+
+		return nil
+	})
 
 	go func() {
 		defer cancel()
@@ -98,6 +115,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ctx.Done():
+			slog.Info("Closing connection", "playerId", playerId)
 			closeWith(conn, websocket.CloseNormalClosure, "")
 			return
 		case <-ticker.C:
@@ -106,12 +124,4 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-}
-
-func setupHeartBeat(conn *websocket.Conn) {
-	conn.SetReadLimit(512)
-	conn.SetReadDeadline(time.Now().Add(pongWait))
-	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(pongWait))
-	})
 }

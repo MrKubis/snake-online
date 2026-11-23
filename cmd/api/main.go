@@ -54,6 +54,7 @@ func main() {
 			defer close(hubDone)
 			srv.RunHub(ctx)
 		}()
+		srv.StartQueueReaper(ctx, 10*time.Second, api.QueueHeartbeatMaxAge)
 	} else {
 		close(hubDone)
 	}
